@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>The Speech Train (Final UI Polish)</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        background: #222;
+        font-family: 'Segoe UI', sans-serif;
+        overflow: hidden;
+        color: white;
+      }
+      #game-container {
+        position: relative;
+        width: 100vw;
+        height: 100vh;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+      canvas {
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        background: #87ceeb;
+      }
+
+      /* UI Overlays */
+      .overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.9);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 20;
+        text-align: center;
+        pading: 20px;
+      }
+      .hidden {
+        display: none !important;
+      }
+
+      h1 {
+        font-size: 3rem;
+        margin-bottom: 0.5rem;
+        color: #ffd700;
+        text-shadow: 2px 2px #000;
+      }
+      p {
+        font-size: 1.2rem;
+        max-width: 600px;
+        line-height: 1.6;
+        margin-bottom: 2rem;
+      }
+
+      button {
+        padding: 15px 40px;
+        font-size: 1.5rem;
+        background: #28a745;
+        color: white;
+        border: none;
+        border-radius: 50px;
+        cursor: pointer;
+        transition: transform 0.2s;
+        font-weight: bold;
+        margin-top: 20px;
+      }
+      button:hover {
+        transform: scale(1.05);
+        background: #218838;
+      }
+
+      /* Start Screen Pages */
+      .page-container {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        width: 100%;
+      }
+      .student-instruction-box {
+        background: rgba(255, 255, 255, 0.15);
+        padding: 30px;
+        border-radius: 15px;
+        text-align: left;
+        max-width: 800px;
+      }
+      .student-instruction-box h2 {
+        font-size: 2.5rem;
+        margin: 15px 0;
+      }
+      .teacher-instruction-box {
+        text-align: left;
+        background: rgba(255, 255, 255, 0.1);
+        padding: 20px;
+        border-radius: 10px;
+        margin-bottom: 20px;
+        max-width: 500px;
+      }
+      .nav-hint {
+        position: absolute;
+        bottom: 30px;
+        color: #aaa;
+        font-size: 0.9rem;
+        animation: pulse 2s infinite;
+      }
+      @keyframes pulse {
+        0% {
+          opacity: 0.5;
+        }
+        50% {
+          opacity: 1;
+        }
+        100% {
+          opacity: 0.5;
+        }
+      }
+
+      /* HUD Elements */
+      #hud {
+        position: absolute;
+        top: 20px;
+        width: 100%;
+        padding: 0 40px;
+        box-sizing: border-box;
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        pointer-events: none;
+        z-index: 10;
+      }
+
+      .stat-box {
+        background: rgba(0, 0, 0, 0.6);
+        padding: 10px 20px;
+        border-radius: 10px;
+        text-align: center;
+        min-width: 100px;
+      }
+      .stat-label {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        color: #aaa;
+      }
+      .stat-value {
+        font-size: 1.5rem;
+        font-weight: bold;
+        font-family: monospace;
+      }
+
+      /* Progress Container Centered */
+      #progress-container {
+        flex-grow: 1;
+        margin: 0 40px;
+        height: 50px;
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #progress-line {
+        width: 100%;
+        height: 4px;
+        background: #555;
+        position: absolute;
+        z-index: 1;
+      }
+      .station-node {
+        width: 15px;
+        height: 15px;
+        background: #888;
+        border-radius: 50%;
+        z-index: 2;
+        margin: 0 1%;
+        border: 2px solid #fff;
+        transition: background 0.3s;
+      }
+      .station-node.green {
+        background: #28a745;
+      }
+      .station-node.red {
+        background: #dc3545;
+      }
+
+      /* Right Panel Stacking */
+      #hud-right-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      /* Distance Warning */
+      #dist-warning-container {
+        position: absolute;
+        top: 110px;
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        pointer-events: none;
+        z-index: 5;
+      }
+      #dist-warning-box {
+        background: rgba(0, 0, 0, 0.5);
+        padding: 10px 25px;
+        border-radius: 15px;
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #fff;
+      }
+
+      /* Control Feedback */
+      #control-feedback {
+        position: absolute;
+        bottom: 20px;
+        right: 20px;
+        background: rgba(0, 0, 0, 0.7);
+        padding: 15px;
+        border-radius: 10px;
+        font-family: monospace;
+        font-size: 1rem;
+        pointer-events: none;
+        z-index: 10;
+      }
+      .key-indicator {
+        display: inline-block;
+        padding: 5px 10px;
+        border: 1px solid #aaa;
+        border-radius: 4px;
+        margin: 0 5px;
+        color: #aaa;
+      }
+      .key-active {
+        background: #fff;
+        color: #000;
+        border-color: #fff;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game-container">
+      <canvas id="gameCanvas"></canvas>
+
+      <div id="hud" class="hidden">
+        <div class="stat-box">
+          <div class="stat-label">Speed</div>
+          <div class="stat-value"><span id="speed-display">0</span> km/h</div>
+        </div>
+
+        <div id="progress-container">
+          <div id="progress-line"></div>
+        </div>
+
+        <div id="hud-right-panel">
+          <div class="stat-box">
+            <div class="stat-label">Stations</div>
+            <div class="stat-value"><span id="score-display">0</span>/7</div>
+          </div>
+          <div class="stat-box">
+            <div class="stat-label">Time</div>
+            <div class="stat-value"><span id="timer-display">00:00</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="dist-warning-container" class="hidden">
+        <div id="dist-warning-box">
+          Next Station: <span id="dist-val">0</span>m
+        </div>
+      </div>
+
+      <div id="start-screen-overlay" class="overlay">
+        <div id="student-page" class="page-container">
+          <h1>The Speech Train</h1>
+          <div class="student-instruction-box">
+            <h2 style="color: #90ee90">
+              Fast! Fast! Fast!
+              <span style="font-size: 1.5rem; color: white">to speed up</span>
+            </h2>
+            <h2 style="color: #ff0000">
+              Sloooowwww
+              <span style="font-size: 1.5rem; color: white">to slow down</span>
+            </h2>
+            <h2 style="color: #aaa">
+              Silence
+              <span style="font-size: 1.5rem; color: white">- no change</span>
+            </h2>
+            <h2
+              style="
+                color: #28a745;
+                margin-top: 30px;
+                border-top: 1px solid rgba(255, 255, 255, 0.3);
+                padding-top: 20px;
+              "
+            >
+              Full Stop
+              <span style="font-size: 1.5rem; color: white"
+                >at stations to turn Green</span
+              >
+            </h2>
+          </div>
+          <button id="start-btn-student">Start Game</button>
+          <div class="nav-hint">Press PAGE DOWN for Teacher Instructions</div>
+        </div>
+
+        <div id="teacher-page" class="page-container hidden">
+          <h1>Teacher Controls</h1>
+          <div class="teacher-instruction-box">
+            <strong style="color: #ffd700">CONTROLS:</strong><br />
+            1. <strong>Right Arrow (→)</strong>: Speed Up (Fast talking).<br />
+            2. <strong>Left Arrow (←)</strong>: Brake (Slow talking).<br />
+            <br />
+            <strong style="color: #ffd700">CHANGES:</strong><br />
+            - Top Speed is now 200 km/h!<br />
+            - Distances are much longer.<br />
+            - Watch the "Next Station" distance indicator at the top.
+          </div>
+          <button id="start-btn-teacher">Start Game</button>
+          <div class="nav-hint" style="bottom: 10px">
+            Press PAGE UP for Student Instructions
+          </div>
+        </div>
+      </div>
+
+      <div id="end-screen" class="overlay hidden">
+        <h1>Journey Complete!</h1>
+        <p id="final-message">You cleared X stations.</p>
+        <p>Time: <span id="final-time">00:00</span></p>
+        <button onclick="location.reload()">Play Again</button>
+      </div>
+
+      <div id="control-feedback" class="hidden">
+        <span id="key-left" class="key-indicator">← BRAKE</span>
+        <span id="key-right" class="key-indicator">ACCEL →</span>
+      </div>
+    </div>
+
+    <script>
+      class InputController {
+        constructor() {
+          this.keys = { ArrowRight: false, ArrowLeft: false };
+          window.addEventListener('keydown', (e) => {
+            if (this.keys.hasOwnProperty(e.code)) {
+              this.keys[e.code] = true;
+              this.updateVisuals();
+            }
+          });
+          window.addEventListener('keyup', (e) => {
+            if (this.keys.hasOwnProperty(e.code)) {
+              this.keys[e.code] = false;
+              this.updateVisuals();
+            }
+          });
+        }
+        getState() {
+          if (this.keys.ArrowRight) return 'FAST';
+          if (this.keys.ArrowLeft) return 'SLOW';
+          return 'NEUTRAL';
+        }
+        updateVisuals() {
+          const leftEl = document.getElementById('key-left');
+          const rightEl = document.getElementById('key-right');
+          leftEl.style.backgroundColor = this.keys.ArrowLeft
+            ? '#ff4d4d'
+            : 'transparent';
+          leftEl.className = this.keys.ArrowLeft
+            ? 'key-indicator key-active'
+            : 'key-indicator';
+          rightEl.style.backgroundColor = this.keys.ArrowRight
+            ? '#90EE90'
+            : 'transparent';
+          rightEl.className = this.keys.ArrowRight
+            ? 'key-indicator key-active'
+            : 'key-indicator';
+        }
+      }
+
+      class Game {
+        constructor() {
+          this.canvas = document.getElementById('gameCanvas');
+          this.ctx = this.canvas.getContext('2d');
+          this.input = new InputController();
+
+          this.resize();
+          window.addEventListener('resize', () => this.resize());
+
+          this.active = false;
+          this.startTime = 0;
+
+          this.speed = 0;
+          this.distance = 0;
+
+          this.accelRate = 0.3;
+          this.brakeRate = 0.5;
+          this.friction = 0.02;
+
+          this.stations = [2500, 6000, 9500, 14000, 16500, 20000, 23000];
+          this.maxDistance = 24000;
+          this.stationStatus = new Array(this.stations.length).fill(0);
+          this.score = 0;
+
+          this.trainX = this.canvas.width * 0.2;
+          this.steamParticles = [];
+          this.scenery = [];
+          this.clouds = [];
+
+          // DOM
+          this.uiSpeed = document.getElementById('speed-display');
+          this.uiScore = document.getElementById('score-display');
+          this.uiTimer = document.getElementById('timer-display');
+          this.uiProgress = document.getElementById('progress-container');
+          this.uiDist = document.getElementById('dist-val');
+
+          this.generateScenery();
+          this.generateClouds();
+          this.setupProgressUI();
+          this.setupStartScreenNav();
+        }
+
+        resize() {
+          this.canvas.width = window.innerWidth;
+          this.canvas.height = window.innerHeight;
+          this.trainX = this.canvas.width * 0.2;
+        }
+
+        generateScenery() {
+          this.scenery = [];
+          for (
+            let i = 200;
+            i < this.maxDistance;
+            i += 100 + Math.random() * 300
+          ) {
+            let nearStation = this.stations.some((s) => Math.abs(s - i) < 500);
+
+            if (!nearStation) {
+              const rand = Math.random();
+              let type = 'tree';
+              if (rand > 0.6) type = 'pole';
+              if (rand > 0.85) type = 'building';
+
+              this.scenery.push({
+                x: i,
+                type: type,
+                h: 50 + Math.random() * 100,
+              });
+            }
+          }
+        }
+
+        generateClouds() {
+          this.clouds = [];
+          for (
+            let i = 0;
+            i < this.maxDistance * 1.5;
+            i += 600 + Math.random() * 1000
+          ) {
+            this.clouds.push({
+              x: i,
+              y: Math.random() * (this.canvas.height * 0.4), // Top 40% of screen
+              speed: 0.2 + Math.random() * 0.3, // Parallax speed factor
+              size: 30 + Math.random() * 20,
+            });
+          }
+        }
+
+        setupProgressUI() {
+          const existing = document.querySelectorAll('.station-node');
+          existing.forEach((e) => e.remove());
+          for (let i = 0; i < this.stations.length; i++) {
+            let node = document.createElement('div');
+            node.className = 'station-node';
+            node.id = `node-${i}`;
+            this.uiProgress.appendChild(node);
+          }
+        }
+
+        setupStartScreenNav() {
+          const studentPage = document.getElementById('student-page');
+          const teacherPage = document.getElementById('teacher-page');
+          document.addEventListener('keydown', (e) => {
+            if (!this.active) {
+              if (e.code === 'PageDown') {
+                studentPage.classList.add('hidden');
+                teacherPage.classList.remove('hidden');
+              }
+              if (e.code === 'PageUp') {
+                teacherPage.classList.add('hidden');
+                studentPage.classList.remove('hidden');
+              }
+            }
+          });
+        }
+
+        start() {
+          this.active = true;
+          this.startTime = Date.now();
+          document
+            .getElementById('start-screen-overlay')
+            .classList.add('hidden');
+          document.getElementById('hud').classList.remove('hidden');
+          document
+            .getElementById('control-feedback')
+            .classList.remove('hidden');
+          document
+            .getElementById('dist-warning-container')
+            .classList.remove('hidden');
+          this.loop();
+        }
+
+        update() {
+          const now = Date.now();
+          const diff = Math.floor((now - this.startTime) / 1000);
+          this.elapsedTimeStr = `${Math.floor(diff / 60)
+            .toString()
+            .padStart(2, '0')}:${(diff % 60).toString().padStart(2, '0')}`;
+          this.uiTimer.innerText = this.elapsedTimeStr;
+
+          const state = this.input.getState();
+          if (state === 'FAST') this.speed += this.accelRate;
+          else if (state === 'SLOW') this.speed -= this.brakeRate;
+          else this.speed -= this.friction;
+
+          if (this.speed < 0) this.speed = 0;
+          if (this.speed > 50) this.speed = 50;
+
+          this.distance += this.speed;
+
+          this.stations.forEach((stPos, index) => {
+            if (this.stationStatus[index] !== 0) return;
+            let distDiff = this.distance - stPos;
+            const tolerance = 55;
+
+            if (Math.abs(distDiff) <= tolerance) {
+              if (this.speed < 0.1) {
+                this.stationStatus[index] = 1;
+                this.score++;
+                this.updateUI();
+              }
+            } else if (distDiff > tolerance) {
+              this.stationStatus[index] = 2;
+              this.updateUI();
+            }
+          });
+
+          if (this.distance >= this.maxDistance) this.endGame();
+
+          this.uiSpeed.innerText = Math.floor(this.speed * 4);
+
+          let nextIndex = this.stationStatus.findIndex((s) => s === 0);
+          if (nextIndex !== -1) {
+            let dist = Math.floor(this.stations[nextIndex] - this.distance);
+            this.uiDist.innerText = dist > 0 ? dist : 0;
+          } else {
+            this.uiDist.innerText = '0';
+          }
+        }
+
+        updateUI() {
+          this.uiScore.innerText = this.score;
+          this.stationStatus.forEach((status, i) => {
+            const node = document.getElementById(`node-${i}`);
+            if (status === 1) node.className = 'station-node green';
+            if (status === 2) node.className = 'station-node red';
+          });
+        }
+
+        draw() {
+          // Sky
+          this.ctx.fillStyle = '#87CEEB';
+          this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+          // Clouds (Parallax background)
+          this.drawClouds();
+
+          // Ground
+          const groundY = this.canvas.height * 0.66;
+          this.ctx.fillStyle = '#4ec05b';
+          this.ctx.fillRect(
+            0,
+            groundY,
+            this.canvas.width,
+            this.canvas.height * 0.34
+          );
+
+          // Scenery
+          this.drawScenery(groundY);
+
+          // Tracks
+          this.ctx.fillStyle = '#5d4037';
+          this.ctx.fillRect(
+            0,
+            this.canvas.height * 0.72,
+            this.canvas.width,
+            20
+          );
+
+          const tieSpacing = 100;
+          const offset = this.distance % tieSpacing;
+          this.ctx.fillStyle = '#3e2723';
+          for (let i = -1; i < this.canvas.width / tieSpacing + 1; i++) {
+            this.ctx.fillRect(
+              i * tieSpacing - offset,
+              this.canvas.height * 0.71,
+              20,
+              40
+            );
+          }
+
+          // Stations
+          this.drawStations(groundY);
+
+          this.drawTrain(this.trainX, this.canvas.height * 0.61);
+          this.updateParticles();
+        }
+
+        drawClouds() {
+          this.ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+          this.clouds.forEach((cloud) => {
+            // Parallax scrolling based on cloud speed factor
+            let screenX =
+              ((cloud.x - this.distance * cloud.speed) %
+                (this.canvas.width + 400)) -
+              200;
+
+            this.ctx.beginPath();
+            this.ctx.arc(screenX, cloud.y, cloud.size, 0, Math.PI * 2);
+            this.ctx.arc(
+              screenX + cloud.size * 0.8,
+              cloud.y - cloud.size * 0.3,
+              cloud.size * 0.9,
+              0,
+              Math.PI * 2
+            );
+            this.ctx.arc(
+              screenX + cloud.size * 1.6,
+              cloud.y,
+              cloud.size * 0.8,
+              0,
+              Math.PI * 2
+            );
+            this.ctx.fill();
+          });
+        }
+
+        drawScenery(groundY) {
+          this.scenery.forEach((obj) => {
+            let screenX = obj.x - this.distance + this.trainX + 10;
+
+            if (screenX > -100 && screenX < this.canvas.width + 100) {
+              if (obj.type === 'tree') {
+                this.ctx.fillStyle = '#8B4513';
+                this.ctx.fillRect(screenX, groundY - 40, 20, 40);
+                this.ctx.fillStyle = '#228B22';
+                this.ctx.beginPath();
+                this.ctx.arc(screenX + 10, groundY - 60, 40, 0, Math.PI * 2);
+                this.ctx.fill();
+              } else if (obj.type === 'pole') {
+                this.ctx.fillStyle = '#555';
+                this.ctx.fillRect(screenX, groundY - 120, 5, 120);
+                this.ctx.fillStyle = '#FFD700';
+                this.ctx.beginPath();
+                this.ctx.arc(screenX - 10, groundY - 110, 8, 0, Math.PI * 2);
+                this.ctx.fill();
+                this.ctx.fillRect(screenX - 10, groundY - 115, 15, 5);
+              } else if (obj.type === 'building') {
+                this.ctx.fillStyle = '#708090';
+                this.ctx.fillRect(screenX, groundY - obj.h, 60, obj.h);
+                this.ctx.fillStyle = '#F0F8FF';
+                for (let wy = 10; wy < obj.h; wy += 20) {
+                  this.ctx.fillRect(screenX + 10, groundY - obj.h + wy, 10, 10);
+                  this.ctx.fillRect(screenX + 40, groundY - obj.h + wy, 10, 10);
+                }
+              }
+            }
+          });
+        }
+
+        drawStations(groundY) {
+          const stationHeight = 150;
+          const stationTopY = groundY - stationHeight;
+
+          this.stations.forEach((pos, i) => {
+            let screenX = pos - this.distance + this.trainX + 10;
+            if (screenX > -200 && screenX < this.canvas.width + 200) {
+              let color = '#8d6e63';
+              if (this.stationStatus[i] === 1) color = '#28a745';
+              if (this.stationStatus[i] === 2) color = '#dc3545';
+
+              this.ctx.fillStyle = color;
+              this.ctx.fillRect(screenX, stationTopY, 120, stationHeight);
+
+              this.ctx.beginPath();
+              this.ctx.moveTo(screenX - 20, stationTopY);
+              this.ctx.lineTo(screenX + 60, stationTopY - 40);
+              this.ctx.lineTo(screenX + 140, stationTopY);
+              this.ctx.fillStyle = '#3e2723';
+              this.ctx.fill();
+
+              this.ctx.fillStyle = 'white';
+              this.ctx.fillRect(screenX + 20, stationTopY + 20, 80, 20);
+              this.ctx.fillStyle = 'black';
+              this.ctx.font = '12px Arial';
+              this.ctx.textAlign = 'center';
+              this.ctx.fillText(
+                `STATION ${i + 1}`,
+                screenX + 60,
+                stationTopY + 34
+              );
+              this.ctx.textAlign = 'start';
+            }
+          });
+        }
+
+        drawTrain(x, y) {
+          const wobble = Math.sin(Date.now() / 50) * (this.speed * 0.2);
+          this.ctx.save();
+          this.ctx.translate(x, y + wobble);
+
+          this.ctx.fillStyle = '#d32f2f';
+          this.ctx.fillRect(0, 0, 140, 80);
+          this.ctx.fillStyle = '#b71c1c';
+          this.ctx.fillRect(0, -40, 50, 40);
+          this.ctx.fillStyle = '#87CEEB';
+          this.ctx.fillRect(10, -30, 30, 20);
+          this.ctx.fillStyle = '#333';
+          this.ctx.fillRect(100, -30, 30, 30);
+          this.ctx.beginPath();
+          this.ctx.moveTo(90, -30);
+          this.ctx.lineTo(140, -30);
+          this.ctx.lineTo(115, 0);
+          this.ctx.fill();
+
+          const wheelRot = this.distance / 20;
+          this.ctx.fillStyle = '#333';
+          this.ctx.lineWidth = 4;
+          this.ctx.strokeStyle = '#aaa';
+
+          [25, 70, 115].forEach((wx) => {
+            this.ctx.beginPath();
+            this.ctx.arc(wx, 80, 20, 0, Math.PI * 2);
+            this.ctx.fill();
+            this.ctx.stroke();
+            this.ctx.beginPath();
+            this.ctx.moveTo(wx, 80);
+            this.ctx.lineTo(
+              wx + Math.cos(wheelRot) * 20,
+              80 + Math.sin(wheelRot) * 20
+            );
+            this.ctx.stroke();
+          });
+
+          this.ctx.fillStyle = '#555';
+          this.ctx.beginPath();
+          this.ctx.moveTo(140, 0);
+          this.ctx.lineTo(160, 80);
+          this.ctx.lineTo(140, 80);
+          this.ctx.fill();
+          this.ctx.restore();
+
+          if (this.speed > 2 && Math.random() > 0.8) {
+            this.steamParticles.push({
+              x: x + 115,
+              y: y - 40,
+              vx: -2 - Math.random(),
+              vy: -1 - Math.random(),
+              size: 10 + Math.random() * 10,
+              alpha: 0.8,
+            });
+          }
+        }
+
+        updateParticles() {
+          this.ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+          for (let i = this.steamParticles.length - 1; i >= 0; i--) {
+            let p = this.steamParticles[i];
+            p.x += p.vx;
+            p.y += p.vy;
+            p.size += 0.5;
+            p.alpha -= 0.02;
+            this.ctx.fillStyle = `rgba(255, 255, 255, ${p.alpha})`;
+            this.ctx.beginPath();
+            this.ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            this.ctx.fill();
+            if (p.alpha <= 0) this.steamParticles.splice(i, 1);
+          }
+        }
+
+        endGame() {
+          this.active = false;
+          document.getElementById('end-screen').classList.remove('hidden');
+          document.getElementById('hud').classList.add('hidden');
+          document.getElementById('control-feedback').classList.add('hidden');
+          document
+            .getElementById('dist-warning-container')
+            .classList.add('hidden');
+          document.getElementById(
+            'final-message'
+          ).innerHTML = `You cleared <strong>${this.score} / ${this.stations.length}</strong> stations!`;
+          document.getElementById('final-time').innerText = this.elapsedTimeStr;
+        }
+
+        loop() {
+          if (!this.active) return;
+          this.update();
+          this.draw();
+          requestAnimationFrame(() => this.loop());
+        }
+      }
+
+      const game = new Game();
+      document
+        .getElementById('start-btn-teacher')
+        .addEventListener('click', () => game.start());
+      document
+        .getElementById('start-btn-student')
+        .addEventListener('click', () => game.start());
+    </script>
+  </body>
+</html>

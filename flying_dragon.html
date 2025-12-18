@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dragon Flight: Turbo Speed (Black Tail)</title>
+    <style>
+      body {
+        margin: 0;
+        overflow: hidden;
+        background-color: #222;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        color: white;
+        user-select: none;
+      }
+
+      #gameCanvas {
+        display: block;
+        width: 100vw;
+        height: 100vh;
+      }
+
+      /* UI Overlays */
+      #ui-layer {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+      }
+
+      .screen {
+        background: rgba(0, 0, 0, 0.85);
+        padding: 40px;
+        border-radius: 20px;
+        text-align: center;
+        border: 4px solid #ff4500; /* Redder border for speed */
+        box-shadow: 0 0 30px rgba(255, 69, 0, 0.6);
+        pointer-events: auto;
+        max-width: 600px;
+        width: 90%;
+      }
+
+      h1 {
+        color: #ff4500;
+        font-size: 3em;
+        margin-bottom: 10px;
+        text-shadow: 2px 2px #000;
+        font-style: italic; /* Italic for speed */
+      }
+
+      p {
+        font-size: 1.2em;
+        line-height: 1.6;
+        color: #ddd;
+      }
+
+      .instruction-box {
+        background: rgba(255, 255, 255, 0.1);
+        padding: 20px;
+        border-radius: 10px;
+        margin: 20px 0;
+        text-align: left;
+      }
+
+      .key-instruction {
+        display: flex;
+        align-items: center;
+        margin-bottom: 15px;
+        font-size: 1.1em;
+      }
+
+      .key-btn {
+        background: #eee;
+        color: #333;
+        font-weight: bold;
+        padding: 5px 15px;
+        border-radius: 5px;
+        margin-right: 15px;
+        box-shadow: 0 3px 0 #999;
+        min-width: 60px;
+        text-align: center;
+      }
+
+      button {
+        background: linear-gradient(to bottom, #ff4500, #b33c00);
+        border: none;
+        padding: 15px 40px;
+        font-size: 1.5em;
+        color: white;
+        border-radius: 50px;
+        cursor: pointer;
+        margin-top: 20px;
+        transition: transform 0.1s;
+        font-weight: bold;
+        box-shadow: 0 4px 0 #662200;
+      }
+
+      button:active {
+        transform: translateY(4px);
+        box-shadow: none;
+      }
+
+      /* HUD */
+      #hud {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        width: calc(100% - 40px);
+        pointer-events: none;
+        display: none;
+      }
+
+      .hud-panel {
+        display: flex;
+        justify-content: space-between;
+        font-size: 1.5em;
+        font-weight: bold;
+        text-shadow: 2px 2px 4px black;
+      }
+
+      .hidden {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="hud">
+      <div class="hud-panel">
+        <span id="distance-display">Distance: 1000m</span>
+        <span id="score-display">Hits: 0</span>
+      </div>
+    </div>
+
+    <div id="ui-layer">
+      <div id="screen-intro" class="screen">
+        <h1>Dragon Turbo</h1>
+        <p><strong>Goal:</strong> Survive the high-speed flight!</p>
+
+        <div class="instruction-box">
+          <div class="key-instruction">
+            <span class="key-btn">UP</span>
+            <span>Flap Wings / Fly Up</span>
+          </div>
+          <div class="key-instruction">
+            <span class="key-btn">DOWN</span>
+            <span>Dive Down</span>
+          </div>
+          <div class="key-instruction">
+            <span class="key-btn">NONE</span>
+            <span>Glide Forward</span>
+          </div>
+          <div class="key-instruction">
+            <span class="key-btn">🚀</span>
+            <span><strong>Speed:</strong> SUPER FAST!</span>
+          </div>
+        </div>
+
+        <button onclick="startGame()">Start Turbo</button>
+      </div>
+
+      <div id="screen-victory" class="screen hidden">
+        <h1>You Made It!</h1>
+        <p>Welcome to Dragon Island!</p>
+        <h2 id="final-score" style="color: #4db8ff">Total Hits: 0</h2>
+        <button onclick="location.reload()">Play Again</button>
+      </div>
+    </div>
+
+    <script>
+      /**
+       * GLOBAL VARIABLES & CONFIG
+       */
+      const canvas = document.getElementById('gameCanvas');
+      const ctx = canvas.getContext('2d');
+      let lastTime = 0;
+
+      // Game State
+      const GAME_STATE = {
+        MENU: 0,
+        PLAYING: 1,
+        VICTORY: 3,
+      };
+      let currentState = GAME_STATE.MENU;
+
+      // Physics Constants - TUNED FOR SPEED
+      const GRAVITY = 0.25;
+      const LIFT_FORCE = -0.8;
+      const DIVE_FORCE = 0.8;
+      const MAX_SPEED = 10;
+      const SCROLL_SPEED = 8;
+      const ENEMY_SPEED = 12;
+
+      /**
+       * ENTITIES
+       */
+      const dragon = {
+        x: 100,
+        y: 300,
+        width: 60,
+        height: 40,
+        vy: 0,
+        wingAngle: 0,
+        wingSpeed: 0.1,
+        invulnerable: 0,
+        hits: 0,
+      };
+
+      const level = {
+        distance: 10000, // 10,000 pixels / 10 = 1000m display
+        traveled: 0,
+        obstacles: [],
+        enemies: [],
+        clouds: [],
+        finished: false,
+      };
+
+      // Keyboard Controls
+      const keys = { up: false, down: false };
+
+      /**
+       * INITIALIZATION & EVENTS
+       */
+      function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        dragon.y = canvas.height / 2;
+      }
+      window.addEventListener('resize', resize);
+      resize();
+
+      window.addEventListener('keydown', (e) => {
+        if (e.code === 'ArrowUp') keys.up = true;
+        if (e.code === 'ArrowDown') keys.down = true;
+      });
+      window.addEventListener('keyup', (e) => {
+        if (e.code === 'ArrowUp') keys.up = false;
+        if (e.code === 'ArrowDown') keys.down = false;
+      });
+
+      /**
+       * GAME ENGINE
+       */
+      function startGame() {
+        document.getElementById('screen-intro').classList.add('hidden');
+        document.getElementById('hud').style.display = 'block';
+
+        dragon.y = canvas.height / 2;
+        dragon.hits = 0;
+        level.traveled = 0;
+        level.finished = false;
+        level.obstacles = [];
+        level.enemies = [];
+        generateScenery();
+
+        currentState = GAME_STATE.PLAYING;
+        requestAnimationFrame(gameLoop);
+      }
+
+      function generateScenery() {
+        for (let i = 0; i < 15; i++) {
+          level.clouds.push({
+            x: Math.random() * canvas.width,
+            y: Math.random() * (canvas.height / 2),
+            w: 100 + Math.random() * 100,
+            speed: 0.2 + Math.random() * 0.5,
+          });
+        }
+      }
+
+      function spawnObstacle() {
+        if (level.traveled > level.distance) return;
+
+        // 25% chance for an Enemy Dragon
+        if (level.traveled > 1000 && Math.random() < 0.25) {
+          spawnEnemy();
+          return;
+        }
+
+        const gapHeight = 280;
+        const minWallHeight = 50;
+        const maxWallHeight = canvas.height - gapHeight - minWallHeight;
+
+        let type = Math.floor(Math.random() * 3);
+        let topH = 0,
+          botH = 0;
+
+        if (type === 1) {
+          botH = Math.random() * (maxWallHeight - 100) + 200;
+          topH = 50;
+        } else if (type === 2) {
+          topH = Math.random() * (maxWallHeight - 100) + 200;
+          botH = 50;
+        } else {
+          topH = Math.random() * (canvas.height / 3);
+          botH = Math.random() * (canvas.height / 3);
+        }
+
+        level.obstacles.push({
+          x: canvas.width + 100,
+          y: 0,
+          w: 80 + Math.random() * 40,
+          h: topH,
+          type: 'top',
+        });
+        level.obstacles.push({
+          x: canvas.width + 100,
+          y: canvas.height - botH,
+          w: 80 + Math.random() * 40,
+          h: botH,
+          type: 'bottom',
+        });
+      }
+
+      function spawnEnemy() {
+        level.enemies.push({
+          x: canvas.width + 100,
+          y: Math.random() * (canvas.height - 150) + 50,
+          w: 50,
+          h: 30,
+          wingAngle: 0,
+        });
+      }
+
+      function gameLoop(timestamp) {
+        if (currentState !== GAME_STATE.PLAYING) return;
+
+        let dt = timestamp - lastTime;
+        lastTime = timestamp;
+
+        updatePhysics();
+        updateLevel();
+        draw();
+
+        if (!level.finished) requestAnimationFrame(gameLoop);
+        else endGame();
+      }
+
+      function updatePhysics() {
+        let force = GRAVITY;
+
+        // Keyboard Logic
+        if (keys.up) {
+          force = LIFT_FORCE;
+          dragon.wingSpeed = 0.5; // Flap faster
+        } else if (keys.down) {
+          force = DIVE_FORCE;
+          dragon.wingSpeed = 0.05;
+        } else {
+          force = GRAVITY * 0.5; // Glide
+          dragon.wingSpeed = 0.2;
+        }
+
+        dragon.vy += force;
+        dragon.vy = Math.max(Math.min(dragon.vy, MAX_SPEED), -MAX_SPEED);
+        dragon.y += dragon.vy;
+
+        if (dragon.y < 0) {
+          dragon.y = 0;
+          dragon.vy = 0;
+        }
+        if (dragon.y > canvas.height - dragon.height) {
+          dragon.y = canvas.height - dragon.height;
+          dragon.vy = 0;
+        }
+
+        dragon.wingAngle += dragon.wingSpeed;
+        if (dragon.invulnerable > 0) dragon.invulnerable--;
+      }
+
+      function updateLevel() {
+        level.traveled += SCROLL_SPEED;
+
+        if (level.traveled > level.distance + canvas.width)
+          level.finished = true;
+
+        // Spawning logic adjusted for speed
+        if (level.traveled % 500 < SCROLL_SPEED) spawnObstacle();
+
+        // Obstacles
+        for (let i = level.obstacles.length - 1; i >= 0; i--) {
+          let obs = level.obstacles[i];
+          obs.x -= SCROLL_SPEED;
+          checkCollision(obs);
+          if (obs.x + obs.w < 0) level.obstacles.splice(i, 1);
+        }
+
+        // Enemies
+        for (let i = level.enemies.length - 1; i >= 0; i--) {
+          let enemy = level.enemies[i];
+          enemy.x -= ENEMY_SPEED;
+          enemy.wingAngle += 0.4; // Flap faster
+          checkCollision(enemy);
+          if (enemy.x + enemy.w < 0) level.enemies.splice(i, 1);
+        }
+
+        if (dragon.x < 100) dragon.x += 0.5;
+
+        // Display
+        let distRemaining = Math.max(
+          0,
+          Math.floor((level.distance - level.traveled) / 10)
+        );
+        document.getElementById(
+          'distance-display'
+        ).innerText = `Distance: ${distRemaining}m`;
+        document.getElementById(
+          'score-display'
+        ).innerText = `Hits: ${dragon.hits}`;
+      }
+
+      function checkCollision(obj) {
+        if (dragon.invulnerable > 0) return;
+        let padding = 10;
+        if (
+          dragon.x + dragon.width - padding > obj.x &&
+          dragon.x + padding < obj.x + obj.w &&
+          dragon.y + dragon.height - padding > obj.y &&
+          dragon.y + padding < obj.y + obj.h
+        ) {
+          dragon.hits++;
+          dragon.invulnerable = 60;
+          dragon.vy = -dragon.vy * 0.5;
+          dragon.x -= 30;
+        }
+      }
+
+      /**
+       * RENDERING
+       */
+      function draw() {
+        // Sky
+        let grad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        grad.addColorStop(0, '#2c3e50');
+        grad.addColorStop(0.5, '#fd746c');
+        grad.addColorStop(1, '#2c3e50');
+        ctx.fillStyle = grad;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Speed Lines (Visual Effect)
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+        ctx.lineWidth = 2;
+        for (let i = 0; i < 5; i++) {
+          let y = Math.random() * canvas.height;
+          let x = Math.random() * canvas.width;
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(x - 200, y);
+          ctx.stroke();
+        }
+
+        // Clouds
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+        level.clouds.forEach((c) => {
+          c.x -= c.speed * 2; // Clouds move fast too
+          if (c.x < -c.w) c.x = canvas.width;
+          ctx.beginPath();
+          ctx.ellipse(c.x, c.y, c.w / 2, c.w / 3, 0, 0, Math.PI * 2);
+          ctx.fill();
+        });
+
+        // Obstacles
+        ctx.fillStyle = '#2d3436';
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2;
+        level.obstacles.forEach((obs) => {
+          ctx.beginPath();
+          ctx.rect(obs.x, obs.y, obs.w, obs.h);
+          ctx.fill();
+          ctx.stroke();
+        });
+
+        // Enemies
+        level.enemies.forEach((enemy) => drawEnemyDragon(enemy));
+
+        // Dragon Island
+        if (level.traveled > level.distance - canvas.width) {
+          let islandX = level.distance - level.traveled + canvas.width + 100;
+          ctx.fillStyle = '#2ecc71';
+          ctx.beginPath();
+          ctx.ellipse(islandX, canvas.height - 50, 200, 100, 0, Math.PI, 0);
+          ctx.fill();
+          ctx.fillStyle = '#8e44ad';
+          ctx.beginPath();
+          ctx.moveTo(islandX - 50, canvas.height - 100);
+          ctx.lineTo(islandX, canvas.height - 300);
+          ctx.lineTo(islandX + 50, canvas.height - 100);
+          ctx.fill();
+        }
+
+        // Player
+        if (dragon.invulnerable % 10 < 5)
+          drawPlayerDragon(dragon.x, dragon.y, dragon.wingAngle);
+
+        // Sea
+        ctx.fillStyle = 'rgba(0, 50, 100, 0.8)';
+        ctx.fillRect(0, canvas.height - 40, canvas.width, 40);
+      }
+
+      function drawPlayerDragon(x, y, wingAngle) {
+        ctx.save();
+        ctx.translate(x, y);
+
+        // Extreme tilt for speed
+        ctx.rotate(dragon.vy * 0.15 + 0.1);
+
+        ctx.fillStyle = '#111';
+        ctx.beginPath();
+        ctx.ellipse(30, 20, 30, 15, 0, 0, Math.PI * 2);
+        ctx.fill(); // Body
+        ctx.beginPath();
+        ctx.ellipse(60, 15, 12, 10, 0, 0, Math.PI * 2);
+        ctx.fill(); // Head
+        ctx.fillStyle = '#0f0';
+        ctx.beginPath();
+        ctx.ellipse(62, 12, 2, 4, 0, 0, Math.PI * 2);
+        ctx.fill(); // Eye
+        ctx.fillStyle = '#222';
+        let wingY = Math.sin(wingAngle) * 15;
+        ctx.beginPath();
+        ctx.moveTo(20, 15);
+        ctx.lineTo(5, 15 - 30 + wingY);
+        ctx.lineTo(40, 15 - 10 + wingY);
+        ctx.fill(); // Wing 1
+        ctx.beginPath();
+        ctx.moveTo(20, 20);
+        ctx.lineTo(0, 20 - 35 + wingY);
+        ctx.lineTo(45, 20 - 15 + wingY);
+        ctx.fill(); // Wing 2
+        ctx.strokeStyle = '#111';
+        ctx.lineWidth = 4;
+
+        // Tail streaming straight back due to speed (Orange flame effect removed)
+        ctx.beginPath();
+        ctx.moveTo(5, 20);
+        ctx.lineTo(-30, 20);
+        ctx.stroke();
+
+        ctx.restore();
+      }
+
+      function drawEnemyDragon(enemy) {
+        ctx.save();
+        ctx.translate(enemy.x, enemy.y);
+        ctx.fillStyle = '#c0392b';
+        ctx.beginPath();
+        ctx.ellipse(25, 15, 25, 12, 0, 0, Math.PI * 2);
+        ctx.fill(); // Body
+        ctx.beginPath();
+        ctx.ellipse(0, 15, 12, 10, 0, 0, Math.PI * 2);
+        ctx.fill(); // Head
+        ctx.fillStyle = '#f1c40f';
+        ctx.beginPath();
+        ctx.ellipse(-5, 12, 2, 4, 0, 0, Math.PI * 2);
+        ctx.fill(); // Eye
+        ctx.fillStyle = '#a93226';
+        let wingY = Math.sin(enemy.wingAngle) * 15;
+        ctx.beginPath();
+        ctx.moveTo(25, 15);
+        ctx.lineTo(40, 15 - 25 + wingY);
+        ctx.lineTo(10, 15 - 10 + wingY);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      function endGame() {
+        currentState = GAME_STATE.VICTORY;
+        document.getElementById('screen-victory').classList.remove('hidden');
+        document.getElementById('hud').style.display = 'none';
+        document.getElementById(
+          'final-score'
+        ).innerText = `You bumped into ${dragon.hits} obstacles!`;
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vocal Perfect: Debug Mode</title>
+    <style>
+      :root {
+        --primary: #ffd700;
+        --secondary: #00d26a;
+        --bg: #121212;
+        --panel: #1e1e1e;
+      }
+      body {
+        background-color: var(--bg);
+        color: #ffffff;
+        font-family: 'Verdana', sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+        margin: 0;
+        user-select: none;
+        overflow: hidden;
+      }
+      #game-wrapper {
+        position: relative;
+        width: 900px;
+        height: 500px;
+        border: 4px solid #444;
+        background: var(--panel);
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        border-radius: 20px;
+        overflow: hidden;
+      }
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+      }
+      .overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.92);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 10;
+        text-align: center;
+        transition: opacity 0.3s;
+      }
+      .hidden {
+        opacity: 0;
+        pointer-events: none;
+        display: none !important;
+      }
+      h1 {
+        font-size: 2.5rem;
+        color: var(--primary);
+        margin-bottom: 10px;
+      }
+      .level-btn {
+        padding: 20px 40px;
+        margin: 10px;
+        font-size: 1.2rem;
+        color: #000;
+        border: none;
+        border-radius: 10px;
+        cursor: pointer;
+        font-weight: bold;
+        width: 200px;
+      }
+      #btn-kaizen {
+        background: #4d94ff;
+      }
+      #btn-orator {
+        background: #ff9933;
+      }
+      #hud {
+        position: absolute;
+        top: 20px;
+        left: 20px;
+        width: calc(100% - 40px);
+        pointer-events: none;
+        display: flex;
+        justify-content: space-between;
+      }
+      .hud-panel {
+        background: rgba(0, 0, 0, 0.6);
+        padding: 10px 20px;
+        border-radius: 10px;
+        border: 1px solid #555;
+      }
+      .big-text {
+        font-size: 1.5rem;
+        font-weight: 800;
+        color: #fff;
+      }
+      #mic-status {
+        width: 15px;
+        height: 15px;
+        border-radius: 50%;
+        background: red;
+        display: inline-block;
+        margin-right: 10px;
+        border: 2px solid white;
+      }
+      #feedback-msg {
+        position: absolute;
+        top: 40%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 4rem;
+        font-weight: 900;
+        text-shadow: 0 0 20px black;
+        opacity: 0;
+        transition: opacity 0.2s;
+        pointer-events: none;
+        color: var(--secondary);
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game-wrapper">
+      <canvas id="gameCanvas" width="900" height="500"></canvas>
+
+      <div id="hud" class="hidden">
+        <div class="hud-panel">
+          <div class="big-text">
+            <span id="mic-status"></span>
+            <span id="mode-text">CALIBRATION</span>
+          </div>
+          <div style="font-size: 12px; color: #aaa; margin-top: 5px">
+            Check Console (F12) for Debug
+          </div>
+        </div>
+        <div class="hud-panel">
+          <div class="big-text">Score: <span id="score-val">0</span></div>
+        </div>
+      </div>
+
+      <div id="feedback-msg">PERFECT!</div>
+
+      <div id="screen-menu" class="overlay">
+        <h1>Select Level</h1>
+        <div>
+          <button
+            id="btn-kaizen"
+            class="level-btn"
+            onclick="initLevel('kaizen')"
+          >
+            Kaizen
+          </button>
+          <button
+            id="btn-orator"
+            class="level-btn"
+            onclick="initLevel('orator')"
+          >
+            Orator
+          </button>
+        </div>
+        <p style="margin-top: 20px; color: #666; font-size: 12px">
+          Ensure Microphone is allowed.
+        </p>
+      </div>
+
+      <div id="screen-end" class="overlay hidden">
+        <h1>Session Complete</h1>
+        <h2 class="big-text" id="final-score">Score: 0</h2>
+        <button
+          class="level-btn"
+          style="background: white"
+          onclick="location.reload()"
+        >
+          Menu
+        </button>
+      </div>
+    </div>
+
+    <script>
+      // --- DATA ---
+      const GAME_DATA = {
+        kaizen: {
+          title: 'Kaizen',
+          sentences: [
+            {
+              type: 'calib',
+              start_offset: 1.0,
+              words: [
+                { text: 'My', dur: 0.5, lane: 1 },
+                { text: 'cat', dur: 0.5, lane: 1 },
+                { text: 'likes', dur: 0.5, lane: 1 },
+                { text: 'to', dur: 0.4, lane: 1 },
+                { text: 'sleep.', dur: 1.0, lane: 1 },
+              ],
+            },
+            {
+              type: 'calib',
+              start_offset: 5.0,
+              words: [
+                { text: 'The', dur: 0.4, lane: 1 },
+                { text: 'sun', dur: 0.5, lane: 1 },
+                { text: 'is', dur: 0.4, lane: 1 },
+                { text: 'very', dur: 0.5, lane: 1 },
+                { text: 'hot', dur: 0.5, lane: 1 },
+                { text: 'today.', dur: 1.0, lane: 1 },
+              ],
+            },
+            {
+              type: 'score',
+              start_offset: 10.0,
+              words: [
+                { text: 'Look', dur: 0.5, lane: 1 },
+                { text: 'at', dur: 0.4, lane: 1 },
+                { text: 'that', dur: 0.4, lane: 1 },
+                { text: 'BIG', dur: 0.6, lane: 0 },
+                { text: 'green', dur: 0.5, lane: 1 },
+                { text: 'frog!', dur: 1.2, lane: 2 },
+              ],
+            },
+            {
+              type: 'score',
+              start_offset: 16.0,
+              words: [
+                { text: 'Do', dur: 0.4, lane: 1 },
+                { text: 'you', dur: 0.4, lane: 1 },
+                { text: 'want', dur: 0.5, lane: 1 },
+                { text: 'to', dur: 0.4, lane: 1 },
+                { text: 'play', dur: 0.6, lane: 2 },
+                { text: 'now?', dur: 1.0, lane: 2 },
+              ],
+            },
+            {
+              type: 'score',
+              start_offset: 22.0,
+              words: [
+                { text: 'We', dur: 0.5, lane: 1 },
+                { text: 'must', dur: 0.5, lane: 1 },
+                { text: 'be', dur: 0.5, lane: 0 },
+                { text: 'very', dur: 0.6, lane: 0 },
+                { text: 'quiet...', dur: 1.5, lane: 0 },
+              ],
+            },
+          ],
+        },
+        orator: {
+          title: 'Orator',
+          sentences: [
+            {
+              type: 'calib',
+              start_offset: 1.0,
+              words: [
+                { text: 'Please', dur: 0.6, lane: 1 },
+                { text: 'speak', dur: 0.6, lane: 1 },
+                { text: 'clearly', dur: 0.7, lane: 1 },
+                { text: 'so', dur: 0.4, lane: 1 },
+                { text: 'everyone', dur: 0.8, lane: 1 },
+                { text: 'can', dur: 0.4, lane: 1 },
+                { text: 'hear', dur: 0.5, lane: 1 },
+                { text: 'you.', dur: 1.0, lane: 1 },
+              ],
+            },
+            {
+              type: 'calib',
+              start_offset: 8.0,
+              words: [
+                { text: 'The', dur: 0.3, lane: 1 },
+                { text: 'quick', dur: 0.5, lane: 1 },
+                { text: 'brown', dur: 0.5, lane: 1 },
+                { text: 'fox', dur: 0.5, lane: 1 },
+                { text: 'jumps', dur: 0.6, lane: 1 },
+                { text: 'over', dur: 0.4, lane: 1 },
+                { text: 'the', dur: 0.3, lane: 1 },
+                { text: 'lazy', dur: 0.6, lane: 1 },
+                { text: 'dog.', dur: 1.0, lane: 1 },
+              ],
+            },
+            {
+              type: 'score',
+              start_offset: 15.0,
+              words: [
+                { text: 'I', dur: 0.3, lane: 1 },
+                { text: 'cannot', dur: 0.6, lane: 1 },
+                { text: 'believe', dur: 0.6, lane: 1 },
+                { text: 'that', dur: 0.4, lane: 1 },
+                { text: 'we', dur: 0.3, lane: 1 },
+                { text: 'finally', dur: 0.7, lane: 1 },
+                { text: 'WON', dur: 0.6, lane: 2 },
+                { text: 'the', dur: 0.3, lane: 2 },
+                { text: 'game!', dur: 1.2, lane: 2 },
+              ],
+            },
+            {
+              type: 'score',
+              start_offset: 22.0,
+              words: [
+                { text: 'The', dur: 0.4, lane: 1 },
+                { text: 'giant', dur: 0.6, lane: 0 },
+                { text: 'monster', dur: 0.8, lane: 0 },
+                { text: 'walked', dur: 0.6, lane: 1 },
+                { text: 'slowly', dur: 0.7, lane: 0 },
+                { text: 'through', dur: 0.5, lane: 1 },
+                { text: 'the', dur: 0.3, lane: 1 },
+                { text: 'dark', dur: 0.5, lane: 0 },
+                { text: 'forest.', dur: 1.5, lane: 0 },
+              ],
+            },
+            {
+              type: 'score',
+              start_offset: 30.0,
+              words: [
+                { text: 'Ladies', dur: 0.6, lane: 1 },
+                { text: 'and', dur: 0.4, lane: 1 },
+                { text: 'Gentlemen,', dur: 0.8, lane: 0 },
+                { text: 'welcome', dur: 0.7, lane: 1 },
+                { text: 'to', dur: 0.3, lane: 1 },
+                { text: 'the', dur: 0.3, lane: 1 },
+                { text: 'GREATEST', dur: 0.8, lane: 2 },
+                { text: 'show', dur: 0.5, lane: 2 },
+                { text: 'on', dur: 0.4, lane: 2 },
+                { text: 'Earth!', dur: 1.2, lane: 2 },
+              ],
+            },
+            {
+              type: 'score',
+              start_offset: 38.0,
+              words: [
+                { text: 'Why', dur: 0.4, lane: 1 },
+                { text: 'is', dur: 0.3, lane: 1 },
+                { text: 'the', dur: 0.3, lane: 1 },
+                { text: 'sky', dur: 0.5, lane: 2 },
+                { text: 'so', dur: 0.3, lane: 1 },
+                { text: 'bright', dur: 0.5, lane: 2 },
+                { text: 'and', dur: 0.3, lane: 1 },
+                { text: 'blue', dur: 0.5, lane: 1 },
+                { text: 'in', dur: 0.3, lane: 1 },
+                { text: 'the', dur: 0.3, lane: 1 },
+                { text: 'morning?', dur: 1.0, lane: 2 },
+              ],
+            },
+            {
+              type: 'score',
+              start_offset: 45.0,
+              words: [
+                { text: 'If', dur: 0.3, lane: 1 },
+                { text: 'we', dur: 0.3, lane: 1 },
+                { text: 'work', dur: 0.5, lane: 1 },
+                { text: 'together,', dur: 0.8, lane: 1 },
+                { text: 'we', dur: 0.3, lane: 1 },
+                { text: 'can', dur: 0.3, lane: 1 },
+                { text: 'solve', dur: 0.5, lane: 1 },
+                { text: 'any', dur: 0.4, lane: 1 },
+                { text: 'problem', dur: 0.7, lane: 0 },
+                { text: 'we', dur: 0.3, lane: 0 },
+                { text: 'face.', dur: 1.2, lane: 0 },
+              ],
+            },
+          ],
+        },
+      };
+
+      const CONFIG = {
+        scrollSpeed: 250,
+        playheadX: 250,
+        noiseThreshold: 0.02,
+        laneHeight: 120,
+      };
+
+      // --- STATE ---
+      let timeline = [];
+      let state = 'MENU';
+      let startTime = 0;
+      let score = 0;
+      let maxPossibleScore = 0;
+      let audioCtx, analyser, micSource;
+      let calibSamples = [];
+      let personalBaseline = 120;
+      let isCalibrated = false;
+      let debugFrameCount = 0;
+      let scoringStartTime = 999;
+
+      let pitchBuffer = [];
+
+      function initLevel(levelKey) {
+        const data = GAME_DATA[levelKey];
+        timeline = [];
+        maxPossibleScore = 0;
+        calibSamples = [];
+        isCalibrated = false;
+        personalBaseline = 120;
+        pitchBuffer = [];
+
+        const firstScoreSentence = data.sentences.find(
+          (s) => s.type === 'score'
+        );
+        scoringStartTime = firstScoreSentence
+          ? firstScoreSentence.start_offset - 1.0
+          : 999;
+
+        data.sentences.forEach((sent) => {
+          let t = sent.start_offset;
+          sent.words.forEach((word) => {
+            timeline.push({
+              text: word.text,
+              start: t,
+              dur: word.dur,
+              lane: word.lane,
+              type: sent.type,
+              isCollected: false,
+              hitProgress: 0,
+            });
+            if (sent.type === 'score') maxPossibleScore++;
+            t += word.dur;
+          });
+        });
+
+        startAudioEngine().then((success) => {
+          if (success) {
+            document.getElementById('screen-menu').classList.add('hidden');
+            document.getElementById('hud').classList.remove('hidden');
+            state = 'PLAYING';
+            startTime = Date.now();
+            score = 0;
+            document.getElementById(
+              'score-val'
+            ).innerText = `0 / ${maxPossibleScore}`;
+            gameLoop();
+          }
+        });
+      }
+
+      async function startAudioEngine() {
+        try {
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          analyser = audioCtx.createAnalyser();
+          analyser.fftSize = 2048;
+          const stream = await navigator.mediaDevices.getUserMedia({
+            audio: true,
+          });
+          micSource = audioCtx.createMediaStreamSource(stream);
+          micSource.connect(analyser);
+          if (audioCtx.state === 'suspended') await audioCtx.resume();
+          return true;
+        } catch (e) {
+          alert('Microphone Error');
+          return false;
+        }
+      }
+
+      // RAW DETECTION
+      function getRawPitch() {
+        if (!analyser) return null;
+        const buffer = new Float32Array(analyser.fftSize);
+        analyser.getFloatTimeDomainData(buffer);
+
+        let sum = 0;
+        for (let i = 0; i < buffer.length; i++) sum += buffer[i] * buffer[i];
+        let rms = Math.sqrt(sum / buffer.length);
+
+        const micLight = document.getElementById('mic-status');
+        if (rms > CONFIG.noiseThreshold) micLight.style.background = '#00d26a';
+        else micLight.style.background = 'red';
+        if (rms < CONFIG.noiseThreshold) return null;
+
+        const sampleRate = audioCtx.sampleRate;
+        const minOffset = Math.floor(sampleRate / 1000);
+        const maxOffset = Math.floor(sampleRate / 60);
+        let bestOffset = -1;
+        let bestCorrelation = 0;
+
+        for (let offset = minOffset; offset < maxOffset; offset++) {
+          let correlation = 0;
+          for (let i = 0; i < buffer.length - offset; i += 4) {
+            correlation += buffer[i] * buffer[i + offset];
+          }
+          if (correlation > bestCorrelation) {
+            bestCorrelation = correlation;
+            bestOffset = offset;
+          }
+        }
+
+        if (bestOffset > -1 && bestCorrelation > 0.01) {
+          let hz = sampleRate / bestOffset;
+          if (isCalibrated) {
+            if (hz > personalBaseline * 2.5) return null;
+          } else {
+            if (hz > 450) return null;
+          }
+          return hz;
+        }
+        return null;
+      }
+
+      // SMOOTHED PITCH
+      function getSmoothedPitch() {
+        const raw = getRawPitch();
+        if (raw) pitchBuffer.push(raw);
+        else pitchBuffer = [];
+
+        if (pitchBuffer.length > 5) pitchBuffer.shift();
+        if (pitchBuffer.length < 3) return raw;
+
+        const sorted = [...pitchBuffer].sort((a, b) => a - b);
+        return sorted[Math.floor(sorted.length / 2)];
+      }
+
+      // --- LANE LOGIC ---
+      function getLane(hz) {
+        if (!hz) return null;
+        const semitones = 12 * Math.log2(hz / personalBaseline);
+
+        // THRESHOLDS: +2.0 and -1.5 Semitones
+        if (semitones > 2.0) return 2;
+        if (semitones < -1.5) return 0;
+        return 1;
+      }
+
+      // --- RENDER ---
+      const canvas = document.getElementById('gameCanvas');
+      const ctx = canvas.getContext('2d');
+
+      function gameLoop() {
+        if (state !== 'PLAYING') return;
+
+        const now = (Date.now() - startTime) / 1000;
+        const hz = getSmoothedPitch();
+
+        // --- FIX: CALCULATE USER LANE HERE (TOP LEVEL) ---
+        const userLane = getLane(hz);
+
+        const isScoring = now > scoringStartTime;
+
+        if (!isScoring) {
+          if (hz && hz > 70 && hz < 400) calibSamples.push(hz);
+          const modeTxt = document.getElementById('mode-text');
+          modeTxt.innerText = 'WARM UP - READING VOICE...';
+          modeTxt.style.color = '#FFD700';
+        } else {
+          if (!isCalibrated) {
+            if (calibSamples.length > 5) {
+              calibSamples.sort((a, b) => a - b);
+              const index = Math.floor(calibSamples.length * 0.7);
+              personalBaseline = calibSamples[index];
+              console.log(
+                `[SYSTEM] Calibration Locked. Personal Baseline: ${Math.round(
+                  personalBaseline
+                )}Hz`
+              );
+            } else {
+              personalBaseline = 120;
+            }
+            isCalibrated = true;
+          }
+          const modeTxt = document.getElementById('mode-text');
+          modeTxt.innerText = 'GAME ON!';
+          modeTxt.style.color = '#00d26a';
+        }
+
+        const lastWord = timeline[timeline.length - 1];
+        if (now > lastWord.start + lastWord.dur + 2) endGame();
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const h = canvas.height / 3;
+        drawLane(0, '#2a2a2a', `High (> +2.0 Semi)`);
+        drawLane(h, '#222222', `Normal`);
+        drawLane(h * 2, '#1a1a1a', `Low (< -1.5 Semi)`);
+
+        timeline.forEach((word) => {
+          const x = CONFIG.playheadX + (word.start - now) * CONFIG.scrollSpeed;
+          const w = word.dur * CONFIG.scrollSpeed;
+          if (x + w < 0 || x > canvas.width) return;
+
+          let laneY = 0;
+          let color = '#fff';
+          if (word.lane === 2) {
+            laneY = h / 2;
+            color = '#ff4d4d';
+          } else if (word.lane === 1) {
+            laneY = h + h / 2;
+            color = '#4d94ff';
+          } else {
+            laneY = h * 2 + h / 2;
+            color = '#00d26a';
+          }
+
+          if (word.isCollected) {
+            ctx.fillStyle = '#FFD700';
+          } else {
+            if (word.hitProgress > 0) {
+              ctx.fillStyle = 'cyan';
+            } else {
+              ctx.fillStyle = word.type === 'calib' ? '#555' : color;
+            }
+          }
+
+          const boxH = 60;
+          ctx.fillRect(x, laneY - boxH / 2, w - 10, boxH);
+
+          ctx.fillStyle = word.isCollected ? '#000' : 'white';
+          ctx.font = 'bold 18px Verdana';
+          ctx.textAlign = 'center';
+          ctx.fillText(word.text, x + w / 2, laneY + 8);
+
+          if (isScoring && word.type === 'score' && !word.isCollected) {
+            const buffer = 0.35;
+            if (
+              now >= word.start - buffer &&
+              now <= word.start + word.dur + buffer
+            ) {
+              ctx.strokeStyle = 'white';
+              ctx.lineWidth = 3;
+              ctx.strokeRect(x, laneY - 30, w - 10, 60);
+
+              // USE GLOBAL userLane
+
+              if (debugFrameCount % 10 === 0 && hz) {
+                console.log(
+                  `Hz:${Math.round(hz)} | Base:${Math.round(
+                    personalBaseline
+                  )} | Target:${word.lane} vs You:${userLane}`
+                );
+              }
+
+              if (userLane === word.lane) {
+                word.hitProgress++;
+                if (word.hitProgress >= 1) {
+                  score++;
+                  word.isCollected = true;
+                  flashFeedback('GOOD!');
+                  document.getElementById(
+                    'score-val'
+                  ).innerText = `${score} / ${maxPossibleScore}`;
+                }
+              }
+            }
+          }
+        });
+
+        ctx.strokeStyle = 'white';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(CONFIG.playheadX, 0);
+        ctx.lineTo(CONFIG.playheadX, canvas.height);
+        ctx.stroke();
+
+        if (hz) {
+          debugFrameCount++;
+          let cy = -100;
+          const centerScreenY = h + h / 2;
+          const semitones = 12 * Math.log2(hz / personalBaseline);
+          const visualScale = 30;
+          cy = centerScreenY - semitones * visualScale;
+          cy = Math.max(20, Math.min(canvas.height - 20, cy));
+
+          ctx.fillStyle = 'yellow';
+          ctx.shadowBlur = 20;
+          ctx.shadowColor = 'yellow';
+          ctx.beginPath();
+          ctx.arc(CONFIG.playheadX, cy, 15, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.shadowBlur = 0;
+
+          // VISUAL DEBUGGER (TRAFFIC LIGHT)
+          // Uses global userLane
+          ctx.fillStyle = userLane === 0 ? '#00d26a' : '#333';
+          ctx.beginPath();
+          ctx.arc(50, h * 2.5, 20, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#fff';
+          ctx.fillText('L', 45, h * 2.5 + 5);
+
+          ctx.fillStyle = userLane === 1 ? '#4d94ff' : '#333';
+          ctx.beginPath();
+          ctx.arc(50, h * 1.5, 20, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#fff';
+          ctx.fillText('N', 45, h * 1.5 + 5);
+
+          ctx.fillStyle = userLane === 2 ? '#ff4d4d' : '#333';
+          ctx.beginPath();
+          ctx.arc(50, h * 0.5, 20, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#fff';
+          ctx.fillText('H', 45, h * 0.5 + 5);
+
+          ctx.fillStyle = '#aaa';
+          ctx.font = '12px monospace';
+          ctx.fillText(`${Math.round(hz)}Hz`, CONFIG.playheadX + 20, cy);
+        }
+        requestAnimationFrame(gameLoop);
+      }
+
+      function drawLane(y, col, txt) {
+        ctx.fillStyle = col;
+        ctx.fillRect(0, y, canvas.width, canvas.height / 3);
+        ctx.fillStyle = '#666';
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillText(txt, 10, y + 20);
+        ctx.strokeStyle = '#333';
+        ctx.beginPath();
+        ctx.moveTo(0, y + canvas.height / 3);
+        ctx.lineTo(canvas.width, y + canvas.height / 3);
+        ctx.stroke();
+      }
+
+      let fbTimer;
+      function flashFeedback(msg) {
+        const el = document.getElementById('feedback-msg');
+        el.style.opacity = 1;
+        clearTimeout(fbTimer);
+        fbTimer = setTimeout(() => (el.style.opacity = 0), 200);
+      }
+
+      function endGame() {
+        state = 'END';
+        document.getElementById('screen-end').classList.remove('hidden');
+        document.getElementById(
+          'final-score'
+        ).innerText = `Final Score: ${score} / ${maxPossibleScore}`;
+      }
+    </script>
+  </body>
+</html>
